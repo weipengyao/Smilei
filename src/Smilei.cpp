@@ -382,17 +382,8 @@ int main( int argc, char *argv[] )
                     if ( vecPatches(0)->EMfields->extTimeFields.size() ) {
                         vecPatches.resetPrescribedFields();
                     }
-
                     vecPatches.solveMaxwell( params, simWindow, itime, time_dual, timers, &smpi );
                 }
-                
-                // apply external time fields if requested
-                if( vecPatches(0)->EMfields->extTimeFields.size() ) {
-                    #pragma omp single
-                    vecPatches.applyPrescribedFields(time_prim);
-                    #pragma omp barrier
-                }
-
             }
         }
         else { //if ( params.uncoupled_grids ) {
@@ -483,6 +474,18 @@ int main( int argc, char *argv[] )
 
             // Finalize field synchronization and exchanges
             vecPatches.finalizeSyncAndBCFields( params, &smpi, simWindow, time_dual, timers, itime );
+
+            if (!params.uncoupled_grids) {
+                if( time_dual > params.time_fields_frozen ) {
+                    // Standard fields operations (maxwell + comms + boundary conditions) are completed
+                    // apply external time fields can be considered if requested
+                    if( vecPatches(0)->EMfields->extTimeFields.size() ) {
+                        #pragma omp single
+                        vecPatches.applyPrescribedFields(time_prim);
+                        #pragma omp barrier
+                    }
+                }
+            }
 
             // call the various diagnostics
             vecPatches.runAllDiags( params, &smpi, itime, timers, simWindow );
